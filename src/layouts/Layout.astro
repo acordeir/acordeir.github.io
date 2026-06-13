@@ -1,0 +1,84 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = "Adam Cordeiro's personal website" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <style is:global>
+      :root {
+        --bg: #f5f5f0;
+        --surface: #ffffff;
+        --text: #1c1c1e;
+        --text-muted: #6e6e73;
+        --accent: #5e5ce6;
+        --accent-hover: #4644d4;
+        --border: #e0e0dc;
+        --shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+      }
+
+      html.dark {
+        --bg: #111113;
+        --surface: #1c1c1e;
+        --text: #f5f5f0;
+        --text-muted: #98989d;
+        --accent: #7b79f7;
+        --accent-hover: #9d9bf9;
+        --border: #2c2c2e;
+        --shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+      }
+
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        min-height: 100vh;
+        line-height: 1.6;
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      a:hover {
+        color: var(--accent-hover);
+        text-decoration: underline;
+      }
+    </style>
+    <!-- Apply theme before paint to avoid flash -->
+    <script is:inline>
+      const saved = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (!saved && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+  </head>
+  <body>
+    <slot />
+    <script>
+      document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      });
+    </script>
+  </body>
+</html>
