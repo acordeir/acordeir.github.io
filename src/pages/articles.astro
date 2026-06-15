@@ -2,8 +2,12 @@
 import Layout from '../layouts/Layout.astro';
 import { getCollection, type CollectionEntry } from 'astro:content';
 
-const articles = (await getCollection('articles', ({ data }: CollectionEntry<'articles'>) => !data.draft))
-  .sort((a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) => b.data.date.getTime() - a.data.date.getTime());
+type Article = CollectionEntry<'articles'>;
+
+const articles = (await getCollection('articles', ({ data }: Article) => !data.draft))
+  .sort((a: Article, b: Article) => b.data.date.getTime() - a.data.date.getTime());
+
+const slug = (article: Article) => article.id.replace(/\.(md|mdx)$/, '');
 ---
 
 <Layout title="Articles · Adam Cordeiro" description="Writing on statistics, math, and machine learning.">
@@ -27,7 +31,7 @@ const articles = (await getCollection('articles', ({ data }: CollectionEntry<'ar
         <ul class="article-list">
           {articles.map((article: CollectionEntry<'articles'>) => (
             <li>
-              <a href={`/articles/${article.slug}`} class="article-link">
+              <a href={`/articles/${slug(article)}`} class="article-link">
                 <span class="article-title">{article.data.title}</span>
                 <span class="article-date">
                   {article.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}

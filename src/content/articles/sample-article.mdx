@@ -5,6 +5,8 @@ date: 2026-06-15
 draft: false
 ---
 
+import PlotlyChart from '../../components/PlotlyChart.astro';
+
 The Central Limit Theorem (CLT) is often introduced as a dry theorem in a stats course,
 but it's quietly behind almost every confidence interval and hypothesis test you've ever run.
 
@@ -28,6 +30,18 @@ $$
 $$
 
 This holds **regardless of the shape of the original distribution** — that's the remarkable part.
+
+## Seeing It in Action
+
+The chart below samples from an **exponential distribution** — heavily right-skewed, nothing like a normal.
+As the sample size $n$ grows, the distribution of standardized sample means snaps into shape:
+
+<PlotlyChart
+  src="/charts/clt-demo.json"
+  caption="5,000 simulations per panel. Source distribution: Exp(1). Red curve: N(0, 1)."
+/>
+
+By $n = 20$ the fit is already quite good. By $n = 100$ it's nearly indistinguishable.
 
 ## Why It Matters
 

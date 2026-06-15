@@ -1,0 +1,58 @@
+---
+interface Props {
+  src: string;
+  height?: number;
+  caption?: string;
+}
+const { src, height = 450, caption } = Astro.props;
+const id = `plot-${src.replace(/[^a-z0-9]/gi, '-')}`;
+---
+
+<figure class="chart-figure">
+  <div id={id} class="chart-container" style={`height: ${height}px`}></div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<script is:inline define:vars={{ src, id }}>
+  function renderChart() {
+    fetch(src)
+      .then(r => r.json())
+      .then(fig => {
+        // Respect the current color scheme
+        const isDark = document.documentElement.classList.contains('dark');
+        const layout = {
+          ...fig.layout,
+          paper_bgcolor: 'transparent',
+          plot_bgcolor: 'transparent',
+          font: { color: isDark ? '#f5f5f0' : '#1c1c1e' },
+        };
+        Plotly.react(id, fig.data, layout, { responsive: true, displayModeBar: false });
+      });
+  }
+
+  if (window.Plotly) {
+    renderChart();
+  } else {
+    document.getElementById('plotly-script').addEventListener('load', renderChart);
+  }
+</script>
+
+<style>
+  .chart-figure {
+    margin: 2rem 0;
+  }
+
+  .chart-container {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  figcaption {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+</style>
