@@ -1,0 +1,39 @@
+---
+title: "The Central Limit Theorem: Why It Actually Matters"
+description: "An intuitive look at one of the most important results in statistics."
+date: 2026-06-15
+draft: false
+---
+
+The Central Limit Theorem (CLT) is often introduced as a dry theorem in a stats course,
+but it's quietly behind almost every confidence interval and hypothesis test you've ever run.
+
+## The Setup
+
+Suppose you have a population with mean $\mu$ and finite variance $\sigma^2$.
+You don't know the distribution — it could be skewed, bimodal, anything.
+
+Draw $n$ independent samples and compute their mean:
+
+$$
+\bar{X}_n = \frac{1}{n} \sum_{i=1}^n X_i
+$$
+
+## What the CLT Says
+
+As $n \to \infty$, the distribution of the standardized sample mean converges to a standard normal:
+
+$$
+\frac{\bar{X}_n - \mu}{\sigma / \sqrt{n}} \xrightarrow{d} \mathcal{N}(0, 1)
+$$
+
+This holds **regardless of the shape of the original distribution** — that's the remarkable part.
+
+## Why It Matters
+
+In practice, $n \geq 30$ is usually enough for the approximation to be good.
+This is why you can use a $z$-test or $t$-test on data that isn't normally distributed
+and still get valid results (under reasonable conditions).
+
+It's also why the normal distribution appears everywhere: many real-world quantities
+are sums or averages of many small independent effects.

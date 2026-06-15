@@ -1,5 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+
+const articles = (await getCollection('articles', ({ data }: CollectionEntry<'articles'>) => !data.draft))
+  .sort((a: CollectionEntry<'articles'>, b: CollectionEntry<'articles'>) => b.data.date.getTime() - a.data.date.getTime());
 ---
 
 <Layout title="Articles · Adam Cordeiro" description="Writing on statistics, math, and machine learning.">
@@ -16,7 +20,24 @@ import Layout from '../layouts/Layout.astro';
       <span class="page-icon">📝</span>
       <h1>Articles</h1>
       <p class="subtitle">Writing on statistics, math, and machine learning.</p>
-      <p class="coming-soon">Coming soon — check back later.</p>
+
+      {articles.length === 0 ? (
+        <p class="empty">No articles yet — check back soon.</p>
+      ) : (
+        <ul class="article-list">
+          {articles.map((article: CollectionEntry<'articles'>) => (
+            <li>
+              <a href={`/articles/${article.slug}`} class="article-link">
+                <span class="article-title">{article.data.title}</span>
+                <span class="article-date">
+                  {article.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+                <span class="article-desc">{article.data.description}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   </main>
 </Layout>
@@ -38,8 +59,8 @@ import Layout from '../layouts/Layout.astro';
   .back {
     color: var(--text-muted);
     font-size: 0.9rem;
-    transition: color 0.15s;
     text-decoration: none;
+    transition: color 0.15s;
   }
 
   .back:hover {
@@ -65,16 +86,9 @@ import Layout from '../layouts/Layout.astro';
   :global(html.dark) .icon-sun { display: inline; }
   :global(html.dark) .icon-moon { display: none; }
 
-  .content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+  .content { display: flex; flex-direction: column; gap: 0.5rem; }
 
-  .page-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-  }
+  .page-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
 
   h1 {
     font-size: 2.25rem;
@@ -85,12 +99,59 @@ import Layout from '../layouts/Layout.astro';
   .subtitle {
     color: var(--text-muted);
     font-size: 1.05rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
   }
 
-  .coming-soon {
+  .empty {
     color: var(--accent);
     font-size: 0.95rem;
     font-weight: 500;
+  }
+
+  .article-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .article-link {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 0.2rem 1rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text);
+    box-shadow: var(--shadow);
+    transition: border-color 0.2s, transform 0.15s;
+  }
+
+  .article-link:hover {
+    border-color: var(--accent);
+    transform: translateX(3px);
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  .article-title {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .article-date {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  .article-desc {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    grid-column: 1 / -1;
   }
 </style>

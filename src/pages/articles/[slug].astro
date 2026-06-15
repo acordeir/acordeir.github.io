@@ -1,0 +1,146 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+
+export async function getStaticPaths() {
+  const articles = await getCollection('articles', ({ data }: CollectionEntry<'articles'>) => !data.draft);
+  return articles.map(article => ({
+    params: { slug: article.slug },
+    props: { article },
+  }));
+}
+
+interface Props {
+  article: CollectionEntry<'articles'>;
+}
+
+const { article } = Astro.props;
+const { Content } = await article.render();
+---
+
+<Layout title={`${article.data.title} · Adam Cordeiro`} description={article.data.description}>
+  <main>
+    <header>
+      <a href="/articles" class="back">← Articles</a>
+      <button id="theme-toggle" aria-label="Toggle light/dark mode">
+        <span class="icon-sun">☀️</span>
+        <span class="icon-moon">🌙</span>
+      </button>
+    </header>
+
+    <article>
+      <div class="meta">
+        <time datetime={article.data.date.toISOString()}>
+          {article.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </time>
+      </div>
+      <h1>{article.data.title}</h1>
+      <p class="description">{article.data.description}</p>
+      <hr />
+      <div class="prose">
+        <Content />
+      </div>
+    </article>
+  </main>
+</Layout>
+
+<style>
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3rem;
+  }
+
+  .back {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .back:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  #theme-toggle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+    font-size: 1rem;
+    box-shadow: var(--shadow);
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  #theme-toggle:hover { border-color: var(--accent); }
+
+  .icon-sun { display: none; }
+  .icon-moon { display: inline; }
+  :global(html.dark) .icon-sun { display: inline; }
+  :global(html.dark) .icon-moon { display: none; }
+
+  .meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+
+  .description {
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    margin-bottom: 1.5rem;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  /* Article body typography */
+  .prose :global(h2) { font-size: 1.5rem; font-weight: 600; margin: 2rem 0 0.75rem; }
+  .prose :global(h3) { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+  .prose :global(p) { margin-bottom: 1.25rem; line-height: 1.75; }
+  .prose :global(ul), .prose :global(ol) { margin: 0 0 1.25rem 1.5rem; line-height: 1.75; }
+  .prose :global(li) { margin-bottom: 0.25rem; }
+  .prose :global(code) {
+    background: var(--border);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .prose :global(pre) {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin-bottom: 1.25rem;
+  }
+  .prose :global(pre code) { background: none; padding: 0; }
+  .prose :global(blockquote) {
+    border-left: 3px solid var(--accent);
+    padding-left: 1rem;
+    color: var(--text-muted);
+    margin: 0 0 1.25rem;
+  }
+
+  /* KaTeX display math centering */
+  .prose :global(.katex-display) { overflow-x: auto; padding: 0.5rem 0; }
+</style>
