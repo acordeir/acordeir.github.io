@@ -1,0 +1,444 @@
+---
+// Self-contained interactive Markov inequality demo.
+// All computation happens in the browser via vanilla JS + Plotly.
+---
+
+<div class="mc-wrap">
+
+  <div class="mc-controls">
+    <div class="mc-field">
+      <label for="mc-dist">Distribution</label>
+      <div class="mc-select-wrap">
+        <select id="mc-dist">
+          <option value="normal">Normal — μ = 100, σ = 20</option>
+          <option value="poisson">Poisson — λ = 100</option>
+          <option value="bimodal">Bimodal — ½·N(85,12) + ½·N(115,10)</option>
+          <option value="cauchy">Cauchy — x₀ = 100, γ = 15</option>
+        </select>
+        <span class="mc-chevron">▾</span>
+      </div>
+    </div>
+
+    <div class="mc-field mc-slider-field">
+      <label>
+        Threshold &nbsp;<em>a</em>&thinsp;=&thinsp;<strong id="mc-a-val">120</strong>&thinsp;min
+      </label>
+      <input type="range" id="mc-slider" min="65" max="220" step="1" value="120" />
+      <div class="mc-ticks">
+        <span>65</span><span>100</span><span>150</span><span>200</span><span>220</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="mc-plot" class="mc-plot"></div>
+
+  <div class="mc-stats">
+    <div class="mc-card" id="mc-actual-card">
+      <div class="mc-card-label">P(X ≥ a)</div>
+      <div class="mc-card-value" id="mc-actual">—</div>
+      <div class="mc-card-sub">Actual probability</div>
+    </div>
+    <div class="mc-card mc-card-bound" id="mc-bound-card">
+      <div class="mc-card-label">𝔼[X] / a</div>
+      <div class="mc-card-value" id="mc-bound">—</div>
+      <div class="mc-card-sub">Markov upper bound</div>
+    </div>
+    <div class="mc-card mc-card-ratio" id="mc-ratio-card">
+      <div class="mc-card-label">Bound / Actual</div>
+      <div class="mc-card-value" id="mc-ratio">—</div>
+      <div class="mc-card-sub">How loose is the bound?</div>
+    </div>
+  </div>
+
+  <p class="mc-caveat" id="mc-cauchy-note">
+    The Cauchy distribution has no finite mean — Markov's inequality does not apply.
+  </p>
+
+</div>
+
+<script is:inline>
+(function () {
+
+  // ── Math utilities ──────────────────────────────────────────────────────
+
+  function erf(x) {
+    const t = 1 / (1 + 0.3275911 * Math.abs(x));
+    const p = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+    const r = 1 - p * Math.exp(-x * x);
+    return x < 0 ? -r : r;
+  }
+
+  const nPDF = (x, mu, s) =>
+    Math.exp(-0.5 * ((x - mu) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+  const nCDF = (x, mu, s) =>
+    0.5 * (1 + erf((x - mu) / (s * Math.SQRT2)));
+  const cPDF = (x, x0, g) =>
+    1 / (Math.PI * g * (1 + ((x - x0) / g) ** 2));
+  const cCDF = (x, x0, g) =>
+    0.5 + Math.atan((x - x0) / g) / Math.PI;
+
+  // Memoised Poisson(λ=100) PMF / CDF
+  const λ = 100;
+  const _lf = [0, 0];
+  function lf(n) {
+    for (let i = _lf.length; i <= n; i++) _lf[i] = _lf[i-1] + Math.log(i);
+    return _lf[n];
+  }
+  const _pmf = {};
+  const pPMF = k => k < 0 ? 0 : (_pmf[k] ??= Math.exp(k * Math.log(λ) - λ - lf(k)));
+  const _cdf = {};
+  function pCDF(k) {
+    if (k < 0) return 0;
+    return _cdf[k] ??= Math.min((k > 0 ? pCDF(k-1) : 0) + pPMF(k), 1);
+  }
+
+  // ── Distribution definitions ─────────────────────────────────────────────
+
+  const D = {
+    normal: {
+      color: '#6366f1', xMin: 28, xMax: 178, mean: 100, discrete: false,
+      pdf:   x => nPDF(x, 100, 20),
+      prob:  a => 1 - nCDF(a, 100, 20),
+      bound: a => Math.min(100 / a, 1),
+    },
+    poisson: {
+      color: '#10b981', xMin: 63, xMax: 140, mean: 100, discrete: true,
+      pdf:   k => pPMF(Math.round(k)),
+      prob:  a => 1 - pCDF(Math.ceil(a) - 1),
+      bound: a => Math.min(100 / a, 1),
+    },
+    bimodal: {
+      color: '#f59e0b', xMin: 35, xMax: 168, mean: 100, discrete: false,
+      pdf:   x => 0.5 * nPDF(x, 85, 12) + 0.5 * nPDF(x, 115, 10),
+      prob:  a => 0.5 * (1 - nCDF(a, 85, 12)) + 0.5 * (1 - nCDF(a, 115, 10)),
+      bound: a => Math.min(100 / a, 1),
+    },
+    cauchy: {
+      color: '#ef4444', xMin: 5, xMax: 218, mean: null, discrete: false,
+      pdf:   x => cPDF(x, 100, 15),
+      prob:  a => 1 - cCDF(a, 100, 15),
+      bound: () => null,
+    },
+  };
+
+  // ── Trace builders ───────────────────────────────────────────────────────
+
+  function traces(dk, a) {
+    const d = D[dk], col = d.color;
+
+    if (d.discrete) {
+      const bx = [], by = [], tx = [], ty = [];
+      for (let k = d.xMin; k <= d.xMax; k++) {
+        const p = d.pdf(k);
+        (k < Math.ceil(a) ? (bx.push(k), by.push(p))
+                          : (tx.push(k), ty.push(p)));
+      }
+      const maxY = Math.max(...by, ...ty);
+      return [
+        { x: bx, y: by, type: 'bar', name: 'f(k)', marker: { color: col + '44' },
+          hovertemplate: 'k=%{x}<br>P(X=k)=%{y:.5f}<extra></extra>' },
+        { x: tx, y: ty, type: 'bar', name: 'P(X ≥ a)', marker: { color: col },
+          hovertemplate: 'k=%{x}<br>P(X=k)=%{y:.5f}<extra></extra>' },
+        vline(a,   maxY * 1.18),
+        vline(100, maxY * 0.90, 'dot', 'E[X]'),
+      ];
+    }
+
+    const N = 420;
+    const xs = Array.from({ length: N }, (_, i) => d.xMin + i * (d.xMax - d.xMin) / (N-1));
+    const ys = xs.map(d.pdf);
+    const maxY = Math.max(...ys);
+    const a0  = Math.max(Math.min(a, d.xMax - 0.5), d.xMin + 0.5);
+    const txs = xs.filter(x => x >= a0);
+    const tys = txs.map(d.pdf);
+
+    const out = [
+      { x: xs, y: ys, type: 'scatter', mode: 'lines',
+        line: { color: col, width: 2.5 }, name: 'f(x)',
+        hovertemplate: 'x=%{x:.1f}<br>f(x)=%{y:.5f}<extra></extra>' },
+      { x: [a0, ...txs], y: [0, ...tys],
+        type: 'scatter', mode: 'none',
+        fill: 'tozeroy', fillcolor: col + '4a',
+        name: 'P(X ≥ a)', showlegend: true, hoverinfo: 'skip' },
+      vline(a, maxY * 1.12),
+    ];
+    if (d.mean !== null) out.push(vline(100, maxY * 0.88, 'dot', 'E[X]'));
+    return out;
+  }
+
+  function vline(x, h, dash = 'dash', name = '') {
+    return {
+      x: [x, x], y: [0, h], type: 'scatter', mode: 'lines',
+      line: { color: '#94a3b8', width: 1.5, dash },
+      showlegend: !!name, name, hoverinfo: 'skip',
+    };
+  }
+
+  function layout(dk, a) {
+    const d    = D[dk];
+    const dark = document.documentElement.classList.contains('dark');
+    const fg   = dark ? '#e2e8f0' : '#1e293b';
+    const mute = dark ? '#94a3b8' : '#64748b';
+    const grid = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+    const annot = (x, text, anchor = 'left', xshift = 7) => ({
+      x, xanchor: anchor, xshift,
+      y: 1, yref: 'paper', yanchor: 'top', yshift: -6,
+      text, showarrow: false,
+      font: { size: 11, color: mute },
+    });
+    return {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor:  'rgba(0,0,0,0)',
+      font: { color: fg, family: 'system-ui,-apple-system,sans-serif', size: 12 },
+      margin: { l: 58, r: 24, t: 36, b: 52 },
+      height: 310,
+      bargap: 0.07,
+      legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0)', font: { size: 11 } },
+      xaxis: {
+        title: { text: 'Runtime (minutes)', standoff: 10 },
+        range: [d.xMin, d.xMax],
+        gridcolor: grid, linecolor: grid, zeroline: false, tickcolor: grid,
+      },
+      yaxis: {
+        title: { text: d.discrete ? 'P(X = k)' : 'Density' },
+        gridcolor: grid, linecolor: grid, zeroline: false,
+        rangemode: 'tozero', tickcolor: grid,
+      },
+      annotations: [
+        annot(a, `a = ${a}`),
+        ...(d.mean !== null ? [annot(d.mean, 'E[X]', 'right', -6)] : []),
+      ],
+    };
+  }
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+
+  function fmt(p) {
+    return p >= 0.001 ? (p * 100).toFixed(2) + '%' : p.toExponential(2);
+  }
+
+  function updateStats(dk, a) {
+    const d     = D[dk];
+    const prob  = d.prob(a);
+    const bound = d.bound(a);
+
+    document.getElementById('mc-actual').textContent = fmt(prob);
+    document.getElementById('mc-actual-card').style.setProperty('--card-accent', d.color);
+
+    const hasMarkov = bound !== null;
+    document.getElementById('mc-bound').textContent =
+      hasMarkov ? fmt(bound) : '∞';
+    document.getElementById('mc-ratio').textContent =
+      hasMarkov ? (prob > 1e-12 ? (bound / prob).toFixed(1) + '×' : '—') : '∞';
+
+    document.getElementById('mc-bound-card').classList.toggle('na', !hasMarkov);
+    document.getElementById('mc-ratio-card').classList.toggle('na', !hasMarkov);
+    document.getElementById('mc-cauchy-note').style.display = hasMarkov ? 'none' : 'block';
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  let dk = 'normal', a = 120;
+
+  function render() {
+    const el  = document.getElementById('mc-plot');
+    const cfg = { responsive: true, displayModeBar: false };
+    el.data
+      ? Plotly.react('mc-plot', traces(dk, a), layout(dk, a), cfg)
+      : Plotly.newPlot('mc-plot', traces(dk, a), layout(dk, a), cfg);
+    updateStats(dk, a);
+  }
+
+  function init() {
+    document.getElementById('mc-dist').addEventListener('change', e => { dk = e.target.value; render(); });
+    document.getElementById('mc-slider').addEventListener('input', e => {
+      a = +e.target.value;
+      document.getElementById('mc-a-val').textContent = a;
+      render();
+    });
+    document.getElementById('theme-toggle')?.addEventListener('click', () => setTimeout(render, 40));
+    render();
+  }
+
+  window.Plotly
+    ? init()
+    : document.getElementById('plotly-script')?.addEventListener('load', init);
+})();
+</script>
+
+<style>
+  .mc-wrap {
+    margin: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* ── Controls ── */
+  .mc-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem 2rem;
+    align-items: flex-end;
+    padding: 1.1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .mc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .mc-field label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .mc-select-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .mc-select-wrap select {
+    appearance: none;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.45rem 2rem 0.45rem 0.75rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    min-width: 260px;
+  }
+
+  .mc-select-wrap select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .mc-chevron {
+    position: absolute;
+    right: 0.6rem;
+    color: var(--text-muted);
+    pointer-events: none;
+    font-size: 0.8rem;
+  }
+
+  .mc-slider-field {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .mc-slider-field input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .mc-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+  }
+
+  /* ── Chart ── */
+  .mc-plot {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  /* ── Stats cards ── */
+  .mc-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .mc-card {
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .mc-card-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .mc-card-value {
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .mc-card-sub {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+  }
+
+  /* Actual probability — uses distribution colour */
+  #mc-actual-card {
+    border-color: var(--card-accent, var(--accent));
+  }
+
+  #mc-actual-card .mc-card-value {
+    color: var(--card-accent, var(--accent));
+  }
+
+  /* Markov bound — orange */
+  .mc-card-bound .mc-card-value { color: #f97316; }
+  .mc-card-bound { border-color: #f97316; }
+
+  /* Ratio */
+  .mc-card-ratio .mc-card-value { color: var(--text); }
+
+  /* Disabled when Markov doesn't apply */
+  .mc-card.na {
+    opacity: 0.45;
+    border-color: var(--border) !important;
+  }
+  .mc-card.na .mc-card-value { color: var(--text-muted) !important; }
+
+  /* ── Cauchy note ── */
+  .mc-caveat {
+    display: none;
+    padding: 0.65rem 1rem;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #92400e;
+  }
+
+  :global(html.dark) .mc-caveat {
+    background: #451a0320;
+    border-color: #92400e;
+    color: #fcd34d;
+  }
+
+  @media (max-width: 520px) {
+    .mc-stats { grid-template-columns: 1fr 1fr; }
+    .mc-card-ratio { grid-column: span 2; }
+  }
+</style>
